@@ -84,35 +84,54 @@ function handleNewActivity(e) {
         type: activityType.value,
         content: activityContent.value
     };
-    user.activities.unshift(newActivity); // Add new activity to the beginning of the array
     saveUserActivity(newActivity);
-    renderProfile();
     activityType.value = '';
     activityContent.value = '';
 }
+
+
 
 newActivityForm.addEventListener('submit', handleNewActivity);
 
 
 
 
-// Local Storage 
-function saveUserActivity(activity) {
-    user.activities.push(activity);
-    localStorage.setItem('userActivities', JSON.stringify(user.activities));
-    renderProfile();
+//Replaced Local Storage with API call
+async function saveUserActivity(activity) {
+    try {
+        const response = await fetch('/api/activities', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(activity),
+        });
+        if (!response.ok) throw new Error('Failed to save activity');
+        const savedActivity = await response.json();
+        user.activities.unshift(savedActivity);
+        renderProfile();
+    } catch (error) {
+        console.error('Error saving activity:', error);
+        alert('Failed to save activity. Please try again.');
+    }
 }
 
-function loadUserActivities() {
-    const savedActivities = localStorage.getItem('userActivities');
-    if (savedActivities) {
-        user.activities = JSON.parse(savedActivities);
+async function loadUserActivities() {
+    try {
+        const response = await fetch('/api/activities');
+        if (!response.ok) throw new Error('Failed to load activities');
+        user.activities = await response.json();
+        renderProfile();
+    } catch (error) {
+        console.error('Error loading activities:', error);
+        userActivity.innerHTML = '<p style="color: red;">Failed to load activities. Please refresh the page.</p>';
     }
 }
 
 
+
 // Load saved activities on startup
-loadUserActivities();
+document.addEventListener('DOMContentLoaded', loadUserActivities);
 // Initial render
 renderProfile();
 renderFeed();
