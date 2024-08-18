@@ -12,25 +12,61 @@ const newActivityForm = document.getElementById('newActivityForm');
 const activityType = document.getElementById('activityType');
 const activityContent = document.getElementById('activityContent');
 
-
-// Sample data
+// Sample user data (you might want to fetch this from the server in a real application)
 const user = {
+    id: 1,
     name: 'Vidhu P V',
     dpURL: 'https://media.licdn.com/dms/image/D5603AQEUXPPpzIxlQg/profile-displayphoto-shrink_200_200/0/1693378871682?e=2147483647&v=beta&t=AmZuJ3JnFS7kjHT33l1brxoDJCPwGunmD5WK-sO5GwI',
-    activities: [
-        { type: 'Watching:', content: 'Deadpool and Wolverine' },
-        { type: 'Reading:', content: 'The Intel Trinity' },
-        { type: 'Listening to:', content: 'Lithonia' }
-    ]
 };
 
-const friends = [
-    { name: 'Alice', dpURL: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRBbEJdzbfR45OfgFLca2WE_HCerUGRYmCGGQ&s', activity: { type: 'Watching:', content: 'Breaking Bad' } },
-    { name: 'Bob', dpURL: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQGd5qgLAocViyp1I_INuHGdMIW2zPiLPdIsw&s', activity: { type: 'Reading:', content: '1984' } },
-    { name: 'Charlie', dpURL: 'https://www.thetimes.com/imageserver/image/%2Fmethode%2Ftimes%2Fprod%2Fweb%2Fbin%2F55fde6c6-890f-11ec-8600-c48a9935f856.jpg?crop=510%2C765%2C5%2C8', activity: { type: 'Listening to:', content: 'Stairway to Heaven' } }
-];
+// API functions
+async function fetchActivities() {
+    try {
+        const response = await fetch('/api/activities');
+        if (!response.ok) {
+            throw new Error('Failed to fetch activities');
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching activities:', error);
+        return [];
+    }
+}
 
-// View switching
+async function createActivity(activity) {
+    try {
+        const response = await fetch('/api/activities', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(activity),
+        });
+        if (!response.ok) {
+            throw new Error('Failed to create activity');
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Error creating activity:', error);
+        return null;
+    }
+}
+
+async function deleteActivity(id) {
+    try {
+        const response = await fetch(`/api/activities/${id}`, {
+            method: 'DELETE',
+        });
+        if (!response.ok) {
+            throw new Error('Failed to delete activity');
+        }
+        return true;
+    } catch (error) {
+        console.error('Error deleting activity:', error);
+        return false;
+    }
+}
+// UI functions
 function showView(view) {
     profileView.style.display = 'none';
     feedView.style.display = 'none';
@@ -38,82 +74,88 @@ function showView(view) {
     view.style.display = 'block';
 }
 
-
-// Event listeners for navigation
-profileBtn.addEventListener('click', () => showView(profileView));
-feedBtn.addEventListener('click', () => showView(feedView));
-recommendBtn.addEventListener('click', () => showView(recommendView));
-
-//  User profile render
 function renderProfile() {
     userInfo.innerHTML = `
-        <img src="${user.dpURL}"  class='dpURL'>
+        <img src="${user.dpURL}" alt="${user.name}" class="dpURL">
         <h3>${user.name}</h3>
     `;
-    userActivity.innerHTML = user.activities.map(activity => 
-        `<p>${getActivityEmoji(activity.type)} ${activity.type} ${activity.content}</p>`
-    ).join('');
+    renderUserActivities();
 }
 
-//  Friend feed render
-function renderFeed() {
-    friendsFeed.innerHTML = friends.map(friend => `
+async function renderUserActivities() {
+    const activities = await fetchActivities();
+    const userActivities = activities.filter(activity => activity.userId === user.id);
+    userActivity.innerHTML = userActivities.map(activity => `
+        <div class="activity">
+            <p>${getEmojiForType(activity.type)} ${activity.type}: ${activity.content}</p>
+            <small>${new Date(activity.timestamp).toLocaleString()}</small>
+            <button class="delete-btn" data-id="${activity.id}">Delete</button>
+        </div>
+    `).join('');
+    
+    // Add event listeners for delete buttons
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const id = parseInt(e.target.getAttribute('data-id'));
+            if (await deleteActivity(id)) {
+                await renderUserActivities(); // Re-render after successful deletion
+            } else {
+                alert('Failed to delete activity. Please try again.');
+            }
+        });
+    });
+}
+
+async function renderFeed() {
+    const activities = await fetchActivities();
+    friendsFeed.innerHTML = activities.map(activity => `
         <div class="friend-activity">
-            <img src="${friend.dpURL}" alt="${friend.name}" class="dpURL">
-            <div class="friend-info">
-                <h3>${friend.name}</h3>
-                <p>${getActivityEmoji(friend.activity.type)} ${friend.activity.type} ${friend.activity.content}</p>
-            </div>
+            <p><strong>User ${activity.userId}</strong> ${getEmojiForType(activity.type)} ${activity.type}: ${activity.content}</p>
+            <small>${new Date(activity.timestamp).toLocaleString()}</small>
         </div>
     `).join('');
 }
 
-// Helper function to get emoji for activity type
-function getActivityEmoji(type) {
+function getEmojiForType(type) {
     switch (type) {
-        case 'Watching:': return '📺';
-        case 'Reading:': return '📚';
-        case 'Listening to:': return '🎵';
-        default: return '❓';
+        case 'watching':
+            return '📺';
+        case 'reading':
+            return '📚';
+        case 'listening':
+            return '🎵';
+        default:
+            return '';
     }
 }
 
-function handleNewActivity(e) {
+// Event listeners
+profileBtn.addEventListener('click', () => {
+    showView(profileView);
+    renderProfile();
+});
+
+feedBtn.addEventListener('click', () => {
+    showView(feedView);
+    renderFeed();
+});
+
+recommendBtn.addEventListener('click', () => showView(recommendView));
+
+newActivityForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const newActivity = {
+        userId: user.id,
         type: activityType.value,
         content: activityContent.value
     };
-    user.activities.unshift(newActivity); // Add new activity to the beginning of the array
-    saveUserActivity(newActivity);
-    renderProfile();
-    activityType.value = '';
-    activityContent.value = '';
-}
-
-newActivityForm.addEventListener('submit', handleNewActivity);
-
-
-
-
-// Local Storage 
-function saveUserActivity(activity) {
-    user.activities.push(activity);
-    localStorage.setItem('userActivities', JSON.stringify(user.activities));
-    renderProfile();
-}
-
-function loadUserActivities() {
-    const savedActivities = localStorage.getItem('userActivities');
-    if (savedActivities) {
-        user.activities = JSON.parse(savedActivities);
+    const createdActivity = await createActivity(newActivity);
+    if (createdActivity) {
+        activityContent.value = '';
+        renderUserActivities();
     }
-}
+});
 
-
-// Load saved activities on startup
-loadUserActivities();
 // Initial render
-renderProfile();
-renderFeed();
 showView(profileView);
+renderProfile();
